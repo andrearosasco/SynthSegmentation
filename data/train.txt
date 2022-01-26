@@ -1,0 +1,2 @@
+path ycb ../DenseFusion/datasets/ycb/YCB_Video_Dataset
+ycb data/0038/000001-color.png data/0038/000001-label.png
