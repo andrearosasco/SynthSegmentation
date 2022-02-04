@@ -45,7 +45,14 @@ class Segmentator:
                                  # 16=potted plant, 17=sheep, 18=sofa, 19=train, 20=tv/monitor
                                  (0, 64, 0), (128, 64, 0), (0, 192, 0), (128, 192, 0), (0, 64, 128)])
 
-        category_map = torch.argmax(y.squeeze(), dim=0).detach().cpu().numpy()
+        t = 2
+        y = torch.softmax(y/t, dim=1)
+        y = y[:, 1, ...]
+        idx = torch.rand_like(y)
+        category_map = torch.zeros_like(y).int()
+        category_map[y > 0.2] = 1
+        category_map = category_map.squeeze().cpu().numpy()
+        # category_map = torch.argmax(y.squeeze(), dim=0).detach().cpu().numpy()
 
         r = np.zeros_like(category_map).astype(np.uint8)
         g = np.zeros_like(category_map).astype(np.uint8)
