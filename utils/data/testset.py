@@ -59,55 +59,7 @@ def scrape_ycb(root=Path('../DenseFusion/datasets/ycb/YCB_Video_Dataset'),
 
 import scipy.io as scio
 
-def scrape_dae(root=Path('../../Downloads/ADE20K_2016/ADE20K_2016_07_26/')):
-    data = root / 'images'
 
-    i = 0
-
-    frames = []
-    n_frames = {}
-    for fn in data.rglob('*.txt'):  # utility box
-        for l in fn.open('r').readlines():  # street box, file box, bread box, tissue box, tools box, ceramic box, plant box, cigar box, storage box,
-            # if 'box' in l and not ('television' in l or 'refrigerator' in l or
-            #                         'letter' in l or 'office' in l or 'squeeze' in l or
-            #                         'juke' in l or 'street' in l or 'post' in l or
-            #                         'telephone' in l or 'plant' in l or 'electricity' in l or
-            #                         'power' in l or 'breaker' in l):
-            if ' # 0 # 0 # box # box # \"\"' in l[3:]: # or ' # 0 # 0 # box # boxes # \"\"' in l[3:]
-                frames += [str(fn)]
-                n_frames[fn] = n_frames[fn] + 1 if fn in n_frames.keys() else 1
-
-    for k, v in n_frames.items():
-        if v == 1:
-
-            frame = cv2.imread(str(k.parent / f'{k.stem[:-4]}.jpg'))
-            # segmented = cv2.imread(str(k.parent / f'{k.stem[:-4]}_seg.png'))
-
-            class_mask = []
-            instance_mask = []
-            with Image.open(k.parent / f'{k.stem[:-4]}_seg.png') as io:
-                seg = np.array(io)
-
-                # Obtain the segmentation mask, bult from the RGB channels of the _seg file
-            R = seg[:, :, 0]
-            G = seg[:, :, 1]
-            B = seg[:, :, 2]
-            class_mask = (R / 10).astype(np.int32) * 256 + (G.astype(np.int32))
-
-            # Obtain the instance mask from the blue channel of the _seg file
-            # Minstances_hat = np.unique(B, return_inverse=True)[1]
-            # Minstances_hat = np.reshape(Minstances_hat, B.shape)
-            # instance_mask = Minstances_hat
-
-            seg[class_mask != 266] = 0
-
-            res = cv2.addWeighted(frame, 0.4, seg, 0.3, 0)
-
-            f = min([1280 / res.shape[1], 720 / res.shape[0]])
-
-            print(k)
-            cv2.imshow('frame', cv2.resize(res, (round(res.shape[1]*f), round(res.shape[0]*f))))
-            cv2.waitKey(0)
 
 
 def create_ycb_split():

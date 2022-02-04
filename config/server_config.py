@@ -2,7 +2,7 @@
 
 class Config:
     class TrainConfig:
-        lr = 0.01
+        lr = 0.001
         momentum = 0.9
         weight_decay = 0.0
         log_every = 10
@@ -13,11 +13,11 @@ class Config:
 
     class DataConfig:
         class Eval:
-            mb_size = 8
+            mb_size = 64
             paths = None
 
         class Train:
-            mb_size = 32
+            mb_size = 64
 
         num_worker = 30
 

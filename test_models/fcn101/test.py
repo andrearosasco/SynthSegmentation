@@ -49,7 +49,7 @@ def valid(valid_loader, model, metrics):
 if __name__ == '__main__':
     model = models.segmentation.fcn_resnet101(pretrained=False)
     model.classifier[4] = nn.Conv2d(512, 2, kernel_size=(1, 1), stride=(1, 1))
-    model.load_state_dict(torch.load('./seg_model'), strict=False)
+    model.load_state_dict(torch.load('checkpoints/seg_model_f10.4585658013820648'), strict=False)
     # for parameter in model.parameters():
     #     if len(parameter.size()) > 2:
     #         torch.nn.init.xavier_uniform_(parameter)
