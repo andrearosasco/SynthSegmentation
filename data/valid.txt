@@ -1,1 +1,0 @@
-path ycb ../DenseFusion/datasets/ycb/YCB_Video_Dataset
