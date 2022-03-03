@@ -1,15 +1,18 @@
 class Config:
-    class TrainConfig:
+    class General:
+        device = 'cpu'
+
+    class Train:
         lr = 0.01
         momentum = 0.9
         weight_decay = 0.0
         log_every = 10
         epoch = 10
 
-    class EvalConfig:
+    class Eval:
         wandb = True
 
-    class DataConfig:
+    class Data:
         class Eval:
             mb_size = 1
             paths = {'ycb': '../../Downloads/YCB_Video_Dataset'}

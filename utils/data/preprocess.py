@@ -2,6 +2,7 @@ import json
 from functools import reduce
 from pathlib import Path
 
+import torch
 from PIL import Image
 import cv2
 import scipy.io as scio
@@ -35,7 +36,7 @@ def ycb_preprocess():
 
 
 def unity_splits():
-    root = Path('./data/unity/sym2/data')
+    root = Path('./data/unity/sym4/data')
     examples = []
 
     for subdir in root.glob('*/'):
@@ -45,22 +46,20 @@ def unity_splits():
 
         for x, y in zip(sorted(rgbs.glob('*.png'), key=lambda x: int(str(x.stem)[4:])),
                         sorted(labels.glob('*.png'), key=lambda x: int(str(x.stem)[13:]))):
-
             x = reduce(lambda a, b: a / b, x.parts[-3:], Path())
             y = reduce(lambda a, b: a / b, y.parts[-3:], Path())
             examples.append((x, y))
 
-
-    train = examples[:int(1e5)]
-    eval = examples[int(1e5):]
+    train = examples[:int(len(examples) * 0.8)]
+    eval = examples[int(len(examples) * 0.8):]
 
     out_dir = (root.parent / 'splits')
     out_dir.mkdir(exist_ok=True)
     for split, file in zip((train, eval), ('train.txt', 'eval.txt')):
         fp = (out_dir / file).open('w+')
-        print(f'sym2 {str(root)}', file=fp)
+        print(f'sym3 {str(root)}', file=fp)
         for x, y in split:
-            print(f'sym2 {str(x)} {str(y)}', file=fp)
+            print(f'sym3 {str(x)} {str(y)}', file=fp)
         fp.close()
 
 
@@ -76,7 +75,8 @@ def scrape_dae(root=Path('../../Downloads/ADE20K')):
     for fn in data.rglob('*.json'):  # utility box
         data = json.load(fn.open('r'))
         data = data['annotation']
-        for obj in data['object']:  # street box, file box, bread box, tissue box, tools box, ceramic box, plant box, cigar box, storage box,
+        for obj in data[
+            'object']:  # street box, file box, bread box, tissue box, tools box, ceramic box, plant box, cigar box, storage box,
             # if 'box' in l and not ('television' in l or 'refrigerator' in l or
             #                         'letter' in l or 'office' in l or 'squeeze' in l or
             #                         'juke' in l or 'street' in l or 'post' in l or
@@ -91,7 +91,6 @@ def scrape_dae(root=Path('../../Downloads/ADE20K')):
             # if ' # 0 # 0 # box # box # \"\"' in obj: # or ' # 0 # 0 # box # boxes # \"\"' in l[3:]
             #     frames += [str(fn)]
             #     n_frames[fn] = n_frames[fn] + 1 if fn in n_frames.keys() else 1
-
 
     for i, [k, v] in enumerate(n_frames.items()):
         if v == 1:
@@ -122,20 +121,21 @@ def scrape_dae(root=Path('../../Downloads/ADE20K')):
             # Minstances_hat = np.reshape(Minstances_hat, B.shape)
             # instance_mask = Minstances_hat
 
-
             res = cv2.addWeighted(frame, 0.4, seg_img, 0.3, 0)
 
             f = min([1280 / res.shape[1], 720 / res.shape[0]])
 
             print(str(base / rgb))
-            cv2.imshow('frame', cv2.resize(res, (round(res.shape[1]*f), round(res.shape[0]*f))))
+            cv2.imshow('frame', cv2.resize(res, (round(res.shape[1] * f), round(res.shape[0] * f))))
             cv2.waitKey(0)
             pass
 
 
-def unity_preprocess():
-    root = Path('./data/unity/sym2/data')
-
+def unity_preprocess(path='./data/real/data'):
+    root = Path(path)
+    i = 0
+    import socket
+    tot = 0
     for subdir in root.glob('*/'):
         if not subdir.is_dir(): continue
         rgbs = list(subdir.glob('RGB*/'))[0]
@@ -147,7 +147,9 @@ def unity_preprocess():
             rgb = cv2.cvtColor(cv2.imread(str(f)), cv2.COLOR_BGR2RGB)
             label = cv2.imread(str(l))
 
-
+            if np.any(label != 0):
+                i += 1
+            tot += 1
             label[label != 0] = 1
             label = label[..., 0]
 
@@ -156,6 +158,55 @@ def unity_preprocess():
 
             l.unlink()
             f.unlink()
+    print(i)
+    print(tot)
+
+def real_preprocess(path='data/real/data/mask'):
+    root = Path(path)
+    i = 0
+
+    tot = 0
+    for file in root.glob('*.png'):
+
+        label = cv2.imread(str(file))
+
+        if np.any(label != 0):
+            i += 1
+        tot += 1
+        label[label != 255] = 1
+        label[label == 255] = 0
+        label = label[..., 0]
+
+        Image.fromarray(label).save(f'{file.parent}/{file.name.replace("rgb", "")}')
+
+        file.unlink()
+    print(i)
+    print(tot)
+
+def real_splits():
+    root = Path('./data/real/data')
+    examples = []
+
+    for rgb, mask in zip((root / 'rgb').glob('*'), (root / 'mask').glob('*')):
+
+        x = reduce(lambda a, b: a / b, rgb.parts[-2:], Path())
+        y = reduce(lambda a, b: a / b, mask.parts[-2:], Path())
+
+        examples.append((x, y))
+
+    train = examples[:int(len(examples) * 0.0)]
+    eval = examples[int(len(examples) * 0.0):]
+
+    out_dir = (root.parent / 'splits')
+    out_dir.mkdir(exist_ok=True)
+    for split, file in zip((train, eval), ('train.txt', 'eval.txt')):
+        fp = (out_dir / file).open('w+')
+        print(f'real {str(root)}', file=fp)
+        for x, y in split:
+            print(f'real {str(x)} {str(y)}', file=fp)
+        fp.close()
+
 
 if __name__ == '__main__':
-    unity_splits()
+    real_splits()
+

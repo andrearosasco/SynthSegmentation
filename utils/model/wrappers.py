@@ -2,6 +2,8 @@ import PIL
 import numpy as np
 import torch
 import torchvision.transforms as T
+from torchvision.transforms import InterpolationMode
+
 
 class Segmentator:
 
@@ -24,17 +26,18 @@ class Segmentator:
         return segmented_depth
 
     @classmethod
-    def preprocess(self, input):
-        trf = T.Compose([T.Resize(256),
+    def preprocess(self, frame):
+        trf = T.Compose([
+                        T.Resize((192, 256), InterpolationMode.BILINEAR),
                          T.ToTensor(),
                          T.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])])
 
-        frame = PIL.Image.fromarray(input)
+        frame = PIL.Image.fromarray(frame)
         return trf(frame).unsqueeze(0)
 
     @classmethod
-    def postprocess(self, y):
+    def postprocess(self, y, height=480, width=640):
         label_colors = np.array([(0, 0, 0),  # 0=background
                                  # 1=aeroplane, 2=bicycle, 3=bird, 4=boat, 5=bottle
                                  (128, 0, 0), (0, 128, 0), (128, 128, 0), (0, 0, 128), (128, 0, 128),
@@ -45,14 +48,14 @@ class Segmentator:
                                  # 16=potted plant, 17=sheep, 18=sofa, 19=train, 20=tv/monitor
                                  (0, 64, 0), (128, 64, 0), (0, 192, 0), (128, 192, 0), (0, 64, 128)])
 
-        t = 2
-        y = torch.softmax(y/t, dim=1)
-        y = y[:, 1, ...]
-        idx = torch.rand_like(y)
-        category_map = torch.zeros_like(y).int()
-        category_map[y > 0.2] = 1
-        category_map = category_map.squeeze().cpu().numpy()
-        # category_map = torch.argmax(y.squeeze(), dim=0).detach().cpu().numpy()
+        # t = 1
+        # y = torch.softmax(y/t, dim=1)
+        # y = y[:, 1, ...]
+        # idx = torch.rand_like(y)
+        # category_map = torch.zeros_like(y).int()
+        # category_map[y > 0.2] = 1
+        # category_map = category_map.squeeze().cpu().numpy()
+        category_map = torch.argmax(y.squeeze(), dim=0).detach().cpu().numpy()
 
         r = np.zeros_like(category_map).astype(np.uint8)
         g = np.zeros_like(category_map).astype(np.uint8)
@@ -65,9 +68,9 @@ class Segmentator:
             b[idx] = label_colors[l, 2]
 
         segmented_map = np.stack([r, g, b], axis=2)
-        segmented_map = np.array(T.Resize((480, 640), interpolation=PIL.Image.NEAREST)(T.ToPILImage()(segmented_map)))
+        segmented_map = np.array(T.Resize((height, width), interpolation=PIL.Image.NEAREST)(T.ToPILImage()(segmented_map)))
 
-        category_map = np.array(T.Resize((480, 640), interpolation=PIL.Image.NEAREST)(
+        category_map = np.array(T.Resize((height, width), interpolation=PIL.Image.NEAREST)(
             T.ToPILImage()(category_map.astype(np.float32)))).astype(int)
 
         return segmented_map, category_map

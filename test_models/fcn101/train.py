@@ -16,7 +16,7 @@ from torchvision.transforms import InterpolationMode
 
 from config import Config
 from utils.data.testset import TestSet
-from utils.data.trainset import TrainSet
+from utils.data.splitset import SplitDataset
 from torchvision import models
 
 import utils.model.wrappers
@@ -25,60 +25,92 @@ from utils.misc.reproducibility import make_reproducible
 
 def run():
     make_reproducible(1)
-    epoch = Config.TrainConfig.epoch
+    epoch = Config.Train.epoch
 
     model = models.segmentation.fcn_resnet101(pretrained=True).train()
-    model.classifier[4] = nn.Conv2d(256, 2, kernel_size=(1, 1), stride=(1, 1))
-    model.cuda()
+    model.classifier[4] = nn.Conv2d(512, 2, kernel_size=(1, 1), stride=(1, 1))
+    model.to(Config.General.device)
 
-    if Config.EvalConfig.wandb:
+    if Config.Eval.wandb:
         wandb.init(project='segmentation', config=Config.to_dict())
         wandb.watch(model, log='all')
 
+    #
     criterion = nn.CrossEntropyLoss(
-        weight=torch.tensor([0.3, 0.7]).cuda())  # TODO change weights weight=torch.tensor([0.3, 0.7]).cuda()
+        weight=torch.tensor([0.5, 0.5]).to(
+            Config.General.device))  # TODO change weights weight=torch.tensor([0.3, 0.7]).to(Config.General.device)
 
-    optim = AdamW(params=model.parameters(), lr=Config.TrainConfig.lr)
+    # criterion = DiceLoss()
 
-    train_set = TrainSet(splits='./data/unity/sym2/splits', mode='train',
-                         transform=T.Compose([T.Resize((256, 192), InterpolationMode.BILINEAR),
-                                              T.ToTensor(),
-                                              T.Normalize(mean=[0.485, 0.456, 0.406],
-                                                          std=[0.229, 0.224, 0.225])]),
-                         target_transform=T.Compose([T.Resize((256, 192), InterpolationMode.NEAREST),
-                                                     lambda x: torch.tensor(np.array(x), dtype=torch.long)]))
+    optim = SGD(params=model.parameters(), lr=Config.Train.lr, momentum=Config.Train.momentum)
 
-    valid_set_unity = TrainSet(splits='./data/unity/sym2/splits', mode='eval',
-                               transform=T.Compose([T.Resize((256, 192), InterpolationMode.BILINEAR),
-                                                    T.ToTensor(),
-                                                    T.Normalize(mean=[0.485, 0.456, 0.406],
-                                                                std=[0.229, 0.224, 0.225])]),
-                               target_transform=T.Compose([T.Resize((256, 192), InterpolationMode.NEAREST),
-                                                           lambda x: torch.tensor(np.array(x), dtype=torch.long)]))
+    # train_set = SplitDataset(splits='./data/unity/sym3/splits', mode='train',
+    #                      transform=T.Compose([T.Resize((256, 192), InterpolationMode.BILINEAR),
+    #                                           T.ToTensor(),
+    #                                           T.Normalize(mean=[0.485, 0.456, 0.406],
+    #                                                       std=[0.229, 0.224, 0.225])]),
+    #                      target_transform=T.Compose([T.Resize((192, 256), InterpolationMode.NEAREST),
+    #                                                  lambda x: torch.tensor(np.array(x), dtype=torch.long)]))
 
-    train_loader = DataLoader(train_set, batch_size=Config.DataConfig.Train.mb_size, shuffle=True,
-                              num_workers=Config.DataConfig.num_worker)
+    synth_trainset = SplitDataset(splits='./data/unity/sym4/splits', mode='train',
+                         transform=T.Compose([T.ToTensor(),
+                                              # T.Pad([0, 80], fill=0, padding_mode='constant'),
+                                              T.Resize((192, 256), InterpolationMode.BILINEAR),
+                                              T.Normalize(mean=[0.485, 0.456, 0.406],  # 0.485, 0.456, 0.406
+                                                          std=[0.229, 0.224, 0.225])]),  # 0.229, 0.224, 0.225
+                         target_transform=T.Compose([lambda x: torch.tensor(x, dtype=torch.long).unsqueeze(0),
+                                                     # T.Pad([0, 80], fill=0, padding_mode='constant'),
+                                                     T.Resize((192, 256), InterpolationMode.NEAREST)
+                                                     ]))
 
-    valid_set_ycb = TestSet(splits=Path('./data'), paths=Config.DataConfig.Eval.paths,
-                            transform=T.Compose([T.Resize((256, 192), InterpolationMode.BILINEAR),
-                                                 T.ToTensor(),
-                                                 T.Normalize(mean=[0.485, 0.456, 0.406],
-                                                             std=[0.229, 0.224, 0.225])]),
-                            target_transform=T.Compose([T.Resize((256, 192), InterpolationMode.NEAREST),
-                                                        lambda x: torch.tensor(np.array(x), dtype=torch.long)]))
+    synth_validset = SplitDataset(splits='./data/unity/sym4/splits', mode='eval',
+                               transform=T.Compose([T.ToTensor(),
+                                                    # T.Pad([0, 80], fill=0, padding_mode='constant'),
+                                                    T.Resize((192, 256), InterpolationMode.BILINEAR),
+                                                    T.Normalize(mean=[0.485, 0.456, 0.406],  # 0.485, 0.456, 0.406
+                                                                std=[0.229, 0.224, 0.225])]),  # 0.229, 0.224, 0.225
+                               target_transform=T.Compose([lambda x: torch.tensor(x, dtype=torch.long).unsqueeze(0),
+                                                           # T.Pad([0, 80], fill=0, padding_mode='constant'),
+                                                           T.Resize((192, 256), InterpolationMode.NEAREST)
+                                                           ]))
 
-    valid_loader_ycb = DataLoader(valid_set_ycb, batch_size=Config.DataConfig.Eval.mb_size, shuffle=False,
-                                  num_workers=Config.DataConfig.num_worker)
+    synth_trainloader = DataLoader(synth_trainset, batch_size=Config.Data.Train.mb_size, shuffle=True,
+                              num_workers=Config.Data.num_worker, drop_last=True)
 
-    valid_loader_unity = DataLoader(valid_set_unity, batch_size=Config.DataConfig.Eval.mb_size, shuffle=False,
-                                    num_workers=Config.DataConfig.num_worker)
+    # valid_set_real = TestSet(splits=Path('./data'), paths=Config.Data.Eval.paths,
+    #                         transform=T.Compose([T.ToTensor(),
+    #                                              # T.Pad([0, 80], fill=0, padding_mode='constant'),
+    #                                              T.Resize((192, 256), InterpolationMode.BILINEAR),
+    #                                              T.Normalize(mean=[0.485, 0.456, 0.406],  # 0.485, 0.456, 0.406
+    #                                                          std=[0.229, 0.224, 0.225])]),
+    #                         target_transform=T.Compose([lambda x: torch.tensor(x, dtype=torch.long).unsqueeze(0),
+    #                                                     # T.Pad([0, 80], fill=0, padding_mode='constant'),
+    #                                                     T.Resize((192, 256), InterpolationMode.NEAREST)
+    #                                                     ]))
+
+    real_validset = SplitDataset(splits='./data/real/splits', mode='eval',
+                                   transform=T.Compose([T.ToTensor(),
+                                                        # T.Pad([0, 80], fill=0, padding_mode='constant'),
+                                                        T.Resize((192, 256), InterpolationMode.BILINEAR),
+                                                        T.Normalize(mean=[0.485, 0.456, 0.406],  # 0.485, 0.456, 0.406
+                                                                    std=[0.229, 0.224, 0.225])]),  # 0.229, 0.224, 0.225
+                                   target_transform=T.Compose([lambda x: torch.tensor(x, dtype=torch.long).unsqueeze(0),
+                                                               # T.Pad([0, 80], fill=0, padding_mode='constant'),
+                                                               T.Resize((192, 256), InterpolationMode.NEAREST)
+                                                               ]))
+
+    real_validloader = DataLoader(real_validset, batch_size=Config.Data.Eval.mb_size, shuffle=False,
+                                  num_workers=Config.Data.num_worker)
+
+    synth_validloader = DataLoader(synth_validset, batch_size=Config.Data.Eval.mb_size, shuffle=False,
+                                    num_workers=Config.Data.num_worker)
 
     metrics = {
-        'jaccard': JaccardIndex(num_classes=2, threshold=0.5).to('cuda'),  # TODO , reduction='none'
-        'precision': Precision(threshold=0.5, multiclass=False).to('cuda'),
-        'recall': Recall(threshold=0.5, multiclass=False).to('cuda'),
-        'f1score': F1Score(threshold=0.5, multiclass=False).to('cuda')}
-    avg_loss = MeanMetric().to('cuda')
+        'jaccard': JaccardIndex(num_classes=2, threshold=0.5).to(Config.General.device),  # TODO , reduction='none'
+        'precision': Precision(threshold=0.5, multiclass=False).to(Config.General.device),
+        'recall': Recall(threshold=0.5, multiclass=False).to(Config.General.device),
+        'f1score': F1Score(threshold=0.5, multiclass=False).to(Config.General.device)}
+    avg_loss = MeanMetric().to(Config.General.device)
 
     global_step = 0
     best_score = 0
@@ -89,14 +121,19 @@ def run():
             fixed_img, fixed_gt, sample_img, sample_gt = {}, {}, {}, {}
             print('Validating...')
             model.eval()
-            for valid_loader, s in [[valid_loader_ycb, 'ycb'], [valid_loader_unity, 'unity']]:
+            for valid_loader, s in [[real_validloader, 'ycb'], [synth_validloader, 'unity']]:
                 sample = random.randint(0, len(valid_loader) - 1)
                 for i, (img_batch, lbl_batch) in enumerate(tqdm.tqdm(valid_loader)):
-                    img_batch, lbl_batch = img_batch.cuda(), lbl_batch.cuda()
+                    img_batch, lbl_batch = img_batch.to(Config.General.device), lbl_batch.to(
+                        Config.General.device).squeeze(1)
 
-                    with torch.autocast('cuda'):
+                    with torch.autocast(Config.General.device):
                         logits = model(img_batch)['out']
                         torch.use_deterministic_algorithms(False)
+
+                        # loss = criterion(logits.permute(0, 2, 3, 1),
+                        #                  torch.stack([-(lbl_batch - 1), lbl_batch], dim=1).permute(0, 2, 3, 1))
+
                         loss = criterion(logits.reshape(logits.shape[0], logits.shape[1], -1),
                                          lbl_batch.reshape(lbl_batch.shape[0], -1))
 
@@ -116,13 +153,14 @@ def run():
                         fixed_gt[s] = lbl_batch
 
                 if s == 'ycb':
-                    score = list(metrics.values())[3].compute()
-                    if score > best_score:
-                        best_score = score
-                        torch.save(model.state_dict(), f'checkpoints/seg_model_f1{score}')
-                    torch.save(model.state_dict(), f'checkpoints/latest')
+                    # score = list(metrics.values())[3].compute()
+                    # if score > best_score:
+                    #     best_score = score
+                    #     torch.save(model.state_dict(), f'checkpoints/sym3/seg_model_f1{score}')
+                    torch.save(model.state_dict(), f'checkpoints/sym4/epoch{e}')
+                    torch.save(model.state_dict(), f'checkpoints/sym4/latest')
 
-                if Config.EvalConfig.wandb:
+                if Config.Eval.wandb:
                     for k, v, in metrics.items():
                         wandb.log({f'valid/{k}_{s}': v.compute(),
                                    'global_step': global_step})
@@ -133,7 +171,8 @@ def run():
 
                 avg_loss.reset()
 
-            if Config.EvalConfig.wandb:
+            if Config.Eval.wandb:
+                r_img, r_lbl = next(iter(synth_trainloader))
                 for im, gt, idx, tx in [
                     [fixed_img['ycb'], fixed_gt['ycb'], 3, 'ycb_fixed'],
                     [sample_img['ycb'], sample_gt['ycb'],
@@ -141,18 +180,19 @@ def run():
                     [fixed_img['unity'], fixed_gt['unity'], 0, 'unity_fixed'],
                     [sample_img['unity'], sample_gt['unity'],
                      random.randint(0, sample_img['unity'].shape[0] - 1), 'unity_random'],
-                    [train_set[0][0].unsqueeze(0), train_set[0][1].unsqueeze(0), 0, 'fixed_train'],
-                    [*next(iter(train_loader)), 0, 'random_train']
+                    [synth_trainset[0][0].unsqueeze(0), synth_trainset[0][1], 0, 'fixed_train'],
+                    [r_img, r_lbl.squeeze(), 0, 'random_train']
                 ]:
-                    with torch.autocast('cuda'):
-                        segmented, classes = utils.model.wrappers.Segmentator.postprocess(model(im.cuda())['out'][idx])
-
                     tr = T.Compose([
                         lambda x: x.div(1 / torch.tensor([0.229, 0.224, 0.225]).view(-1, 1, 1).to(x.device)),
                         lambda x: x.sub(-torch.tensor([0.485, 0.456, 0.406]).view(-1, 1, 1).to(x.device)),
-                        T.ToPILImage(),
                         T.Resize((480, 640), InterpolationMode.BILINEAR),
-                        lambda x: np.array(x)])
+                        # lambda x: np.array(x.cpu()).transpose([1, 2, 0])
+                    ])
+
+                    with torch.autocast(Config.General.device):
+                        y = model(im.to(Config.General.device))['out'][idx]
+                        segmented, classes = utils.model.wrappers.Segmentator.postprocess(y, height=480, width=640)
 
                     wb_image = wandb.Image(tr(im[idx]),
                                            masks={'predictions': {'mask_data': classes,
@@ -166,12 +206,16 @@ def run():
 
         print('Training...')
         model.train()
-        for i, (img_batch, lbl_batch) in enumerate(tqdm.tqdm(train_loader)):
-            img_batch, lbl_batch = img_batch.cuda(), lbl_batch.cuda()
+        for i, (img_batch, lbl_batch) in enumerate(tqdm.tqdm(synth_trainloader)):
+            img_batch, lbl_batch = img_batch.to(Config.General.device), lbl_batch.to(Config.General.device).squeeze()
 
-            with torch.autocast('cuda'):
+            with torch.autocast(Config.General.device):
                 logits = model(img_batch)['out']
                 torch.use_deterministic_algorithms(False)
+
+                # loss = criterion(logits.permute(0, 2, 3, 1),
+                #                  torch.stack([-(lbl_batch - 1), lbl_batch], dim=1).permute(0, 2, 3, 1))
+
                 loss = criterion(logits.reshape(logits.shape[0], logits.shape[1], -1),
                                  lbl_batch.reshape(lbl_batch.shape[0], -1))
 
@@ -180,8 +224,8 @@ def run():
             torch.use_deterministic_algorithms(True)
             optim.step()
 
-            if i == len(train_loader) - 1:
-                if Config.EvalConfig.wandb:
+            if i == len(synth_trainloader) - 1:
+                if Config.Eval.wandb:
                     for k, v, in metrics.items():
                         torch.use_deterministic_algorithms(False)
                         wandb.log({f'train/{k}': v(torch.argmax(logits, dim=1), lbl_batch),
@@ -192,8 +236,46 @@ def run():
                     wandb.log({'train/loss': loss.item(),
                                'global_step': global_step})
 
-            global_step += i + (e * len(train_loader))
+            global_step += i + (e * len(synth_trainloader))
+
+
+class DiceLoss(nn.Module):
+
+    def forward(self, scores, target):
+        return soft_dice_loss(target, F.softmax(scores, dim=3))
+
+
+def soft_dice_loss(y_true, y_pred, epsilon=1e-6):
+    '''
+    Soft dice loss calculation for arbitrary batch size, number of classes, and number of spatial dimensions.
+    Assumes the `channels_last` format.
+
+    # Arguments
+        y_true: b x X x Y( x Z...) x c One hot encoding of ground truth
+        y_pred: b x X x Y( x Z...) x c Network output, must sum to 1 over c channel (such as after softmax)
+        epsilon: Used for numerical stability to avoid divide by zero errors
+    '''
+
+    # skip the batch and class axis for calculating Dice score
+    axes = tuple(range(1, len(y_pred.shape) - 1))
+    numerator = 2. * (y_pred * y_true).sum(axes)
+    denominator = (torch.square(y_pred) + torch.square(y_true)).sum(axes)
+
+    return 1 - ((numerator + epsilon) / (denominator + epsilon)).mean()  # average over classes and batch
+    # thanks @mfernezir for catching a bug in an earlier version of this implementation!
 
 
 if __name__ == '__main__':
     run()
+    # criterion = DiceLoss()
+    #
+    # prediction = torch.rand(1, 2, 192, 256)
+    # prediction[:, 1, ...] = 1 - prediction[:, 0, ...]
+    # prediction.permute(0, 2, 3, 1)
+    #
+    # ground_truth = torch.rand(1, 192, 256)
+    # ground_truth = ground_truth.round().to(int)
+    # ground_truth = torch.stack([ground_truth, -(ground_truth - 1)], dim=1)
+    # ground_truth.permute(0, 2, 3, 1)
+    #
+    # criterion(prediction, ground_truth)

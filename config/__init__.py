@@ -1,5 +1,5 @@
 from .server_config import Config
 
-TrainConfig = Config.TrainConfig
-EvalConfig = Config.EvalConfig
-DataConfig = Config.DataConfig
+Train = Config.Train
+Eval = Config.Eval
+Data = Config.Data

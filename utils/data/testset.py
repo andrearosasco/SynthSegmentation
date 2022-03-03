@@ -117,6 +117,9 @@ class TestSet(Dataset):
             image = Image.open(Path(self.paths[line.split()[0]]) / line.split()[1])
             label = Image.open(Path(self.paths[line.split()[0]]) / line.split()[2])
 
+            image = np.array(image)
+            label = np.array(label)
+
             image = self.transform(image)
             label = self.target_transform(label)
 

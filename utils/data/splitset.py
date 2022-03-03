@@ -8,9 +8,9 @@ from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as T
 
 
-class TrainSet(Dataset):
+class SplitDataset(Dataset):
 
-    def __init__(self, splits=Path('data/unity/sym2/splits'), mode='train', transform=T.ToTensor(),
+    def __init__(self, splits, mode='train', transform=T.ToTensor(),
                  target_transform=lambda x: torch.tensor(np.array(x))):
 
         if not isinstance(splits, Path):
@@ -28,9 +28,11 @@ class TrainSet(Dataset):
     def __getitem__(self, idx):
         item = self.examples[idx]
 
-        if item[0] == 'sym2':
-            image = Image.open(self.root / item[1])
-            label = Image.open(self.root / item[2])
+        image = Image.open(self.root / item[1])
+        label = Image.open(self.root / item[2])
+
+        image = np.array(image)
+        label = np.array(label)
 
         if self.transform is not None:
             image = self.transform(image)
@@ -45,7 +47,7 @@ class TrainSet(Dataset):
 
 
 if __name__ == '__main__':
-    train_set = TrainSet()
+    train_set = SplitDataset()
     train_loader = DataLoader(train_set, batch_size=64)
 
     for i, (img_batch, lbl_batch) in enumerate(train_loader):

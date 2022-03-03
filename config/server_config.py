@@ -1,17 +1,20 @@
 
 
 class Config:
-    class TrainConfig:
-        lr = 0.001
-        momentum = 0.9
-        weight_decay = 0.0
-        log_every = 10
-        epoch = 1000
+    class General:
+        device = 'cuda'
 
-    class EvalConfig:
+    class Train:
+        lr = 0.01
+        momentum = 0.9
+        weight_decay = 0.0001
+        log_every = 10
+        epoch = 100
+
+    class Eval:
         wandb = True
 
-    class DataConfig:
+    class Data:
         class Eval:
             mb_size = 64
             paths = None
