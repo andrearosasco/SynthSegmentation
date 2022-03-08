@@ -52,26 +52,26 @@ def run():
     #                      target_transform=T.Compose([T.Resize((192, 256), InterpolationMode.NEAREST),
     #                                                  lambda x: torch.tensor(np.array(x), dtype=torch.long)]))
 
-    synth_trainset = SplitDataset(splits='./data/unity/sym4/splits', mode='train',
+    synth_trainset = SplitDataset(splits='./data/unity/sym5/splits', mode='train',
                          transform=T.Compose([T.ToTensor(),
                                               # T.Pad([0, 80], fill=0, padding_mode='constant'),
-                                              T.Resize((192, 256), InterpolationMode.BILINEAR),
+                                              # T.Resize((192, 256), InterpolationMode.BILINEAR),
                                               T.Normalize(mean=[0.485, 0.456, 0.406],  # 0.485, 0.456, 0.406
                                                           std=[0.229, 0.224, 0.225])]),  # 0.229, 0.224, 0.225
                          target_transform=T.Compose([lambda x: torch.tensor(x, dtype=torch.long).unsqueeze(0),
                                                      # T.Pad([0, 80], fill=0, padding_mode='constant'),
-                                                     T.Resize((192, 256), InterpolationMode.NEAREST)
+                                                     # T.Resize((192, 256), InterpolationMode.NEAREST)
                                                      ]))
 
-    synth_validset = SplitDataset(splits='./data/unity/sym4/splits', mode='eval',
+    synth_validset = SplitDataset(splits='./data/unity/sym5/splits', mode='eval',
                                transform=T.Compose([T.ToTensor(),
                                                     # T.Pad([0, 80], fill=0, padding_mode='constant'),
-                                                    T.Resize((192, 256), InterpolationMode.BILINEAR),
+                                                    # T.Resize((192, 256), InterpolationMode.BILINEAR),
                                                     T.Normalize(mean=[0.485, 0.456, 0.406],  # 0.485, 0.456, 0.406
                                                                 std=[0.229, 0.224, 0.225])]),  # 0.229, 0.224, 0.225
                                target_transform=T.Compose([lambda x: torch.tensor(x, dtype=torch.long).unsqueeze(0),
                                                            # T.Pad([0, 80], fill=0, padding_mode='constant'),
-                                                           T.Resize((192, 256), InterpolationMode.NEAREST)
+                                                           # T.Resize((192, 256), InterpolationMode.NEAREST)
                                                            ]))
 
     synth_trainloader = DataLoader(synth_trainset, batch_size=Config.Data.Train.mb_size, shuffle=True,
@@ -91,12 +91,12 @@ def run():
     real_validset = SplitDataset(splits='./data/real/splits', mode='eval',
                                    transform=T.Compose([T.ToTensor(),
                                                         # T.Pad([0, 80], fill=0, padding_mode='constant'),
-                                                        T.Resize((192, 256), InterpolationMode.BILINEAR),
+                                                        # T.Resize((192, 256), InterpolationMode.BILINEAR),
                                                         T.Normalize(mean=[0.485, 0.456, 0.406],  # 0.485, 0.456, 0.406
                                                                     std=[0.229, 0.224, 0.225])]),  # 0.229, 0.224, 0.225
                                    target_transform=T.Compose([lambda x: torch.tensor(x, dtype=torch.long).unsqueeze(0),
                                                                # T.Pad([0, 80], fill=0, padding_mode='constant'),
-                                                               T.Resize((192, 256), InterpolationMode.NEAREST)
+                                                               # T.Resize((192, 256), InterpolationMode.NEAREST)
                                                                ]))
 
     real_validloader = DataLoader(real_validset, batch_size=Config.Data.Eval.mb_size, shuffle=False,
@@ -157,8 +157,8 @@ def run():
                     # if score > best_score:
                     #     best_score = score
                     #     torch.save(model.state_dict(), f'checkpoints/sym3/seg_model_f1{score}')
-                    torch.save(model.state_dict(), f'checkpoints/sym4/epoch{e}')
-                    torch.save(model.state_dict(), f'checkpoints/sym4/latest')
+                    torch.save(model.state_dict(), f'checkpoints/sym5/epoch{e}')
+                    torch.save(model.state_dict(), f'checkpoints/sym5/latest')
 
                 if Config.Eval.wandb:
                     for k, v, in metrics.items():
@@ -174,9 +174,6 @@ def run():
             if Config.Eval.wandb:
                 r_img, r_lbl = next(iter(synth_trainloader))
                 for im, gt, idx, tx in [
-                    [fixed_img['ycb'], fixed_gt['ycb'], 3, 'ycb_fixed'],
-                    [sample_img['ycb'], sample_gt['ycb'],
-                     random.randint(0, sample_img['ycb'].shape[0] - 1), 'ycb_random'],
                     [fixed_img['unity'], fixed_gt['unity'], 0, 'unity_fixed'],
                     [sample_img['unity'], sample_gt['unity'],
                      random.randint(0, sample_img['unity'].shape[0] - 1), 'unity_random'],
@@ -203,6 +200,27 @@ def run():
                                                       interpolation=cv2.INTER_NEAREST),
                                                       'class_labels': {0: 'background', 1: 'box'}}})
                     wandb.log({f'media/image_{tx}': wb_image})
+
+                # [fixed_img['ycb'], fixed_gt['ycb'], 3, 'ycb_fixed'],
+                # [sample_img['ycb'], sample_gt['ycb'],
+                #  random.randint(0, sample_img['ycb'].shape[0] - 1), 'ycb_random'],
+
+                for i, (img, label) in enumerate(real_validset):
+
+                    with torch.autocast(Config.General.device):
+                        y = model(img.to(Config.General.device))['out']
+                        segmented, classes = utils.model.wrappers.Segmentator.postprocess(y, height=480, width=640)
+
+                    wb_image = wandb.Image(tr(img),
+                                           masks={'predictions': {'mask_data': classes,
+                                                                  'class_labels': {0: 'background', 1: 'box'}},
+                                                  'ground_truth': {'mask_data': cv2.resize(
+                                                      label.numpy(),
+                                                      dsize=(640, 480),
+                                                      interpolation=cv2.INTER_NEAREST),
+                                                      'class_labels': {0: 'background', 1: 'box'}}})
+                    wandb.log({f'real/image{i}': wb_image})
+
 
         print('Training...')
         model.train()

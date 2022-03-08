@@ -36,7 +36,7 @@ def ycb_preprocess():
 
 
 def unity_splits():
-    root = Path('./data/unity/sym4/data')
+    root = Path('./data/unity/sym5/data')
     examples = []
 
     for subdir in root.glob('*/'):
@@ -131,7 +131,7 @@ def scrape_dae(root=Path('../../Downloads/ADE20K')):
             pass
 
 
-def unity_preprocess(path='./data/real/data'):
+def unity_preprocess(path='./data/unity/sym5/data'):
     root = Path(path)
     i = 0
     import socket
@@ -208,5 +208,5 @@ def real_splits():
 
 
 if __name__ == '__main__':
-    real_splits()
+    unity_splits()
 

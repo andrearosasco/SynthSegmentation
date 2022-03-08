@@ -28,12 +28,12 @@ class Segmentator:
     @classmethod
     def preprocess(self, frame):
         trf = T.Compose([
+                        T.ToTensor(),
                         T.Resize((192, 256), InterpolationMode.BILINEAR),
-                         T.ToTensor(),
-                         T.Normalize(mean=[0.485, 0.456, 0.406],
+                        T.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])])
 
-        frame = PIL.Image.fromarray(frame)
+        # frame = PIL.Image.fromarray(frame)
         return trf(frame).unsqueeze(0)
 
     @classmethod
